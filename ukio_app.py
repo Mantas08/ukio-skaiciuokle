@@ -430,7 +430,7 @@ if puslapis == "Suvestine":
         cl2, cr2 = st.columns(2)
         with cl2:
             rd = df.groupby("rusis")["suma"].sum().reset_index()
-            f3 = px.pie(rd, values="suma", names="rusis", title="Pagal rusi", color_discrete_sequence=COLORS)
+            f3 = px.pie(rd, values="suma", names="rusis", title="Pagal rūšį", color_discrete_sequence=COLORS)
             f3.update_layout(paper_bgcolor="white", title_font_size=14)
             st.plotly_chart(f3, width="stretch")
         with cr2:
