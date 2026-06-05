@@ -184,6 +184,27 @@ def nuskaityti_pdf(failas):
     return produktai
 
 
+def gauti_data_is_pdf(failas):
+    with pdfplumber.open(failas) as pdf:
+        for page in pdf.pages:
+            txt = page.extract_text() or ""
+            # Iesko datu formatu: 2025-09-25, 2025.09.25, 25.09.2025, 25/09/2025
+            datos = re.findall(r"\d{4}[-./]\d{2}[-./]\d{2}", txt)
+            datos += re.findall(r"\d{2}[-./]\d{2}[-./]\d{4}", txt)
+            for d in datos:
+                d_clean = d.replace("/", "-").replace(".", "-")
+                parts = d_clean.split("-")
+                try:
+                    if len(parts[0]) == 4:
+                        return parts[0] + "-" + parts[1] + "-" + parts[2]
+                    else:
+                        return parts[2] + "-" + parts[1] + "-" + parts[0]
+                except:
+                    continue
+    return date.today().strftime("%Y-%m-%d")
+
+
+
 # =============================================================================
 # INIT
 # =============================================================================
@@ -514,13 +535,20 @@ elif puslapis == "Sandelis":
         else:
             pdf_file = st.file_uploader("Pasirinkite PDF", type=["pdf"])
             if pdf_file is not None:
-                with st.spinner("Nuskaitoma..."):
-                    produktai = nuskaityti_pdf(pdf_file)
+               
+                 with st.spinner("Nuskaitoma..."):
+                                    produktai = nuskaityti_pdf(pdf_file)
+                                    pdf_file.seek(0)
+                                    pdf_data = gauti_data_is_pdf(pdf_file)
+
 
                 if not produktai:
                     st.warning("Nepavyko rasti produktu lenteles.")
                 else:
-                    st.success("Rasta produktu: " + str(len(produktai)))
+                   
+                    st.success("Rasta produktu: " + str(len(produktai)) + " | Saskaitos data: " + pdf_data)
+                                        pdf_data = st.date_input("Pirkimo data", value=datetime.strptime(pdf_data, "%Y-%m-%d").date())
+
                     edf = pd.DataFrame(produktai)
 
                     st.markdown("###### Patikrinkite duomenis (istrinkite nereikalingas eilutes su - mygtuku):")
@@ -558,7 +586,7 @@ elif puslapis == "Sandelis":
                                     "kiekis":float(row["Kiekis"]), "vienetas":row["Vienetas"],
                                     "kaina_uz_vnt_eur":float(row["Kaina"]),
                                     "bendra_verte":round(float(row["Verte"]),2),
-                                    "data_prideta":date.today().strftime("%Y-%m-%d"),
+                                    "data_prideta":pdf_data.strftime("%Y-%m-%d") if hasattr(pdf_data, "strftime") else str(pdf_data),
                                     "pastaba": "Is: " + pdf_file.name
                                 }).execute()
                                 prideta += 1
