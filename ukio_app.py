@@ -833,12 +833,25 @@ elif puslapis == "Sandėlis":
                     bendra_verte = redaguotas_df["Vertė €"].sum()
                     st.caption(f"Produktų: {len(redaguotas_df)} · Bendra vertė: {bendra_verte:,.2f} €")
 
-                    if st.button("Pridėti visus į sandėlį", type="primary", use_container_width=True):
-                        prideta = 0
-                        for _, row in redaguotas_df.iterrows():
-                            if row["Produktas"] and row["Produktas"].strip():
+                  if st.button("Pridėti visus į sandėlį", type="primary", use_container_width=True):
+                    prideta = 0
+                    atnaujinta = 0
+                    for _, row in redaguotas_df.iterrows():
+                        if row["Produktas"] and row["Produktas"].strip():
+                            pav = row["Produktas"].strip()
+                            esamas = sb.table("sandelis").select("*").eq("produktas", pav).execute()
+                            if esamas.data:
+                                e = esamas.data[0]
+                                naujas_kiekis = e["kiekis"] + float(row["Kiekis"])
+                                nauja_verte = naujas_kiekis * e["kaina_uz_vnt_eur"]
+                                sb.table("sandelis").update({
+                                    "kiekis": round(naujas_kiekis, 4),
+                                    "bendra_verte": round(nauja_verte, 2)
+                                }).eq("id", e["id"]).execute()
+                                atnaujinta += 1
+                            else:
                                 sb.table("sandelis").insert({
-                                    "produktas": row["Produktas"].strip(),
+                                    "produktas": pav,
                                     "rusis": row["Rūšis"],
                                     "kiekis": float(row["Kiekis"]),
                                     "vienetas": row["Vienetas"],
@@ -848,8 +861,8 @@ elif puslapis == "Sandėlis":
                                     "pastaba": f"Iš: {ikeltas_pdf.name}"
                                 }).execute()
                                 prideta += 1
-                        st.success(f"Pridėta {prideta} produktų į sandėlį.")
-                        st.rerun()
+                    st.success(f"Nauju: {prideta}, atnaujinta: {atnaujinta}")
+                    st.rerun()
 
 
 # =====================================================
