@@ -558,7 +558,7 @@ elif puslapis == "Laukai":
                         "kultura": l_kultura,
                         "pastaba": l_pastaba or ""
                     }).execute()
-                    st.success(f"Laukas „{l_pav}" pridėtas.")
+                    st.success(f"Laukas '{l_pav}' pridėtas.")
                     st.rerun()
 
 
@@ -787,7 +787,7 @@ elif puslapis == "Sandėlis":
                         "data_prideta": date.today().strftime("%Y-%m-%d"),
                         "pastaba": s_pastaba or ""
                     }).execute()
-                    st.success(f"Produktas „{s_produktas}" pridėtas. Vertė: {bendra_verte:.2f} €")
+                    st.success(f"Produktas '{s_produktas}' pridėtas. Vertė: {bendra_verte:.2f} €")
                     st.rerun()
 
     with tab_pdf:
