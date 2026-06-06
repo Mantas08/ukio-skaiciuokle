@@ -385,7 +385,7 @@ with st.sidebar:
         d_iki = st.date_input("Iki", value=date(2026, 12, 31), format="YYYY-MM-DD")
 
     st.markdown("---")
-    st.caption("v3.7")
+    st.caption("")
 
 filtrai = {}
 if lauku_opt.get(pas_laukas):
