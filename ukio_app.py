@@ -102,10 +102,6 @@ def num(v):
         return 0.0
 
 
-# =============================================================================
-# DB
-# =============================================================================
-
 def gauti_laukus(sb):
     r = sb.table("laukai").select("*").order("pavadinimas").execute()
     return pd.DataFrame(r.data) if r.data else pd.DataFrame()
@@ -152,9 +148,7 @@ def gauti_pajamas(sb):
     return df
 
 
-# =============================================================================
-# PDF
-# =============================================================================
+
 
 def gauti_data_is_pdf(failas):
     with pdfplumber.open(failas) as pdf:
@@ -330,10 +324,6 @@ def nuskaityti_pdf(failas):
     return produktai
 
 
-# =============================================================================
-# INIT
-# =============================================================================
-
 if not SUPABASE_OK:
     st.error("Neidiegta supabase biblioteka.")
     st.stop()
@@ -356,10 +346,6 @@ SUPABASE_KEY = "jusu-anon-key"
     """)
     st.stop()
 
-
-# =============================================================================
-# SIDEBAR
-# =============================================================================
 
 with st.sidebar:
     st.markdown("#### Ukio skaiciuokle")
@@ -395,10 +381,6 @@ if d_nuo:
 if d_iki:
     filtrai["iki"] = d_iki.strftime("%Y-%m-%d")
 
-
-# =============================================================================
-# SUVESTINE
-# =============================================================================
 
 if puslapis == "Suvestine":
     st.title("Suvestine")
@@ -439,10 +421,6 @@ if puslapis == "Suvestine":
             f4.update_layout(plot_bgcolor="white", paper_bgcolor="white", xaxis_tickangle=-35, title_font_size=14)
             st.plotly_chart(f4, width="stretch")
 
-
-# =============================================================================
-# LAUKAI
-# =============================================================================
 
 elif puslapis == "Laukai":
     st.title("Laukai")
@@ -500,10 +478,6 @@ elif puslapis == "Laukai":
                     st.success("Laukas pridetas: " + lp); st.rerun()
 
 
-# =============================================================================
-# ISLAIDOS
-# =============================================================================
-
 elif puslapis == "Islaidos":
     st.title("Islaidos")
     df = gauti_islaidas(sb, filtrai)
@@ -515,9 +489,6 @@ elif puslapis == "Islaidos":
         st.dataframe(rd, width="stretch", hide_index=True, height=500)
         st.caption("Irasu: " + str(len(df)) + " | Suma: " + str(round(df["suma"].sum(), 2)) + " EUR")
 
-# =============================================================================
-# NAUJAS DARBAS (keli produktai)
-# =============================================================================
 
 elif puslapis == "Naujas darbas":
     st.title("Naujas darbas")
@@ -598,9 +569,6 @@ elif puslapis == "Naujas darbas":
 
 
 
-# =============================================================================
-# SANDELIS
-# =============================================================================
 
 elif puslapis == "Sandelis":
     st.title("Sandelis")
@@ -754,9 +722,6 @@ elif puslapis == "Sandelis":
                             st.rerun()
 
 
-# =============================================================================
-# PAJAMOS
-# =============================================================================
 
 elif puslapis == "Pajamos":
     st.title("Pajamos")
@@ -787,10 +752,6 @@ elif puslapis == "Pajamos":
             st.dataframe(pajdf[ex], width="stretch", hide_index=True)
             st.caption("Visos pajamos: " + str(round(pajdf["pajamu_suma"].sum(), 2)) + " EUR")
 
-
-# =============================================================================
-# PELNINGUMAS
-# =============================================================================
 
 elif puslapis == "Pelningumas":
     st.title("Pelningumas")
@@ -826,10 +787,6 @@ elif puslapis == "Pelningumas":
             st.dataframe(peld, width="stretch", hide_index=True)
     else: st.info("Pridekite duomenu.")
 
-
-# =============================================================================
-# REDAGUOTI
-# =============================================================================
 
 elif puslapis == "Redaguoti":
     st.title("Redaguoti islaidas")
@@ -878,10 +835,6 @@ elif puslapis == "Redaguoti":
                 for _, r in tr.iterrows(): sb.table("islaidos").delete().eq("id", int(r["id"])).execute()
                 st.success("Istrinta: " + str(len(tr))); st.rerun()
 
-
-# =============================================================================
-# EKSPORTAS
-# =============================================================================
 
 elif puslapis == "Eksportas":
     st.title("Eksportas")
