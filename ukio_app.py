@@ -172,12 +172,22 @@ def formatuoti_data(dt):
         return dt.strftime("%Y-%m-%d")
     return str(dt or "")
 
-
 def normalizuoti_vieneta(v):
     vv = txt_norm(v)
     mapping = {
-        "kg": "kg", "t": "t", "l": "l", "lt": "l", "ltr": "l", "l.": "l",
-        "vnt": "vnt", "vnt.": "vnt", "v.": "vnt"
+        "kg": "kg",
+        "t": "t",
+        "tona": "t",
+        "tonos": "t",
+        "tona.": "t",
+        "tonos.": "t",
+        "l": "l",
+        "lt": "l",
+        "ltr": "l",
+        "l.": "l",
+        "vnt": "vnt",
+        "vnt.": "vnt",
+        "v.": "vnt",
     }
     return mapping.get(vv, vv if vv else "vnt")
 
@@ -568,9 +578,10 @@ def parse_agrochema_lines(txt: str, mode_key: str = "agrochema") -> List[dict]:
     return deduplikoti_produktus(out)
 
 
-def parse_linas_agro_lines(txt: str, mode_key: str = "linas_agro") -> List[dict]:
-    produktai = []
+d
+ef parse_linas_agro_lines(txt: str, mode_key: str = "linas_agro") -> Listproduktai = []
     lines = [sutvarkyti_tarpus(l) for l in txt.splitlines() if sutvarkyti_tarpus(l)]
+
     start_idx = 0
     for i, line in enumerate(lines):
         low = txt_norm(line)
@@ -578,41 +589,71 @@ def parse_linas_agro_lines(txt: str, mode_key: str = "linas_agro") -> List[dict]
             start_idx = i + 1
             break
 
+    current_item = None
+
     # Pvz:
-    # 1. KCH_HRODE02_BEL Rodeo Plus ( 20 L) 160,000 l 3,60 576,00 21,00% 120,96 696,96
+    # 1. KFE_NPK112_MAR NPK 10-26-26, Marocco 600 kg 2,400 Tonos 650,00 1 560,00 21,00% 327,60 1 887,60
     row_pattern = re.compile(
-        r"^(?P<eil>\d+)[.]\s+"
+        r"^(?P<eil>\d+)[.]?\s+"
         r"(?P<kodas>[A-Z0-9_\-]+)\s+"
         r"(?P<pavadinimas>.+?)\s+"
         r"(?P<kiekis>[0-9][0-9 ]*,[0-9]{0,3}|[0-9]+)\s+"
-        r"(?P<vienetas>kg|t|l|vnt)\s+"
+        r"(?P<vienetas>Tonos|Tona|kg|t|l|vnt)\s+"
         r"(?P<kaina>[0-9][0-9 ]*,[0-9]{2,4})\s+"
         r"(?P<suma>[0-9][0-9 ]*,[0-9]{2})\s+"
         r"(?P<pvmproc>[0-9]{1,2},[0-9]{2}%|[0-9]{1,2}%?)\s+"
         r"(?P<pvmsuma>[0-9][0-9 ]*,[0-9]{2})\s+"
-        r"(?P<suma_su_pvm>[0-9][0-9 ]*,[0-9]{2})$",
+        r"(?P<suma_su_pvm>[0-9][0-9 .]*,[0-9]{2})$",
         flags=re.IGNORECASE,
     )
 
-    current_item = None
     for line in lines[start_idx:]:
         low = txt_norm(line)
+
         if "iš viso be pvm" in low or "is viso be pvm" in low or "apmokėti iki" in low or "apmoketi iki" in low:
             break
+
+        # pašalinam priklijuotą papildomą tekstą, jei jis nueina į tą pačią eilutę
+        line_clean = line.replace("_", " ").replace("!", " ")
+        line_clean = re.split(r"\bKiekis\s*:", line_clean, maxsplit=1)[0].strip()
+        line_clean = re.split(r"\bVažtaraščio\s+Nr\b", line_clean, maxsplit=1)[0].strip()
+        line_clean = sutvarkyti_tarpus(line_clean)
+
+        if not line_clean:
+            continue
+
+        # praleidžiam papildomas info eilutes
         if low.startswith("kiekis :") or low.startswith("pakuočių skaičius") or low.startswith("pakuociu skaicius"):
             continue
-        m = row_pattern.match(line)
+
+        m = row_pattern.match(line_clean)
         if m:
             if current_item:
                 produktai.append(current_item)
+
+            # mums nereikia prekės kodo -> imam tik pavadinimą
+            pavadinimas = m.group("pavadinimas")
+            kiekis = parse_lt_number(m.group("kiekis"))
+            vienetas = normalizuoti_vieneta(m.group("vienetas"))
+            kaina = parse_lt_number(m.group("kaina"))
+            suma = parse_lt_number(m.group("suma"))
+
             current_item = koreguoti_eilute_pagal_logika(
-                m.group("pavadinimas"), m.group("vienetas"), parse_lt_number(m.group("kiekis")),
-                parse_lt_number(m.group("kaina")), parse_lt_number(m.group("suma")), mode_key
+                produktas=pavadinimas,
+                vienetas=vienetas,
+                kiekis=kiekis,
+                kaina=kaina,
+                verte=suma,
+                mode_key=mode_key,
             )
             continue
-        if current_item and not yra_suvestines_eilute(line):
-            if not any(x in low for x in ["važtaraščio nr", "vaztarascio nr", "pakuočių skaičius", "pakuociu skaicius"]):
-                current_item["Produktas"] = sutvarkyti_tarpus(f'{current_item["Produktas"]} {line}')
+
+        # jeigu eilutė yra produkto tęsinys, prijungiam prie pavadinimo
+        if current_item and not yra_suvestines_eilute(line_clean):
+            if not any(x in txt_norm(line_clean) for x in ["važtaraščio nr", "vaztarascio nr", "pakuočių skaičius", "pakuociu skaicius"]):
+                current_item["Produktas"] = sutvarkyti_tarpus(
+                    f'{current_item["Produktas"]} {line_clean}'
+                )
 
     if current_item:
         produktai.append(current_item)
@@ -622,7 +663,9 @@ def parse_linas_agro_lines(txt: str, mode_key: str = "linas_agro") -> List[dict]
         p["Produktas"] = isvalyti_produkto_pavadinima(p["Produktas"])
         if p["Produktas"] and p["Kiekis"] > 0:
             out.append(p)
+
     return deduplikoti_produktus(out)
+
 
 
 def parse_scandagra_lines(txt: str, mode_key: str = "scandagra") -> List[dict]:
