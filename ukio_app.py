@@ -578,8 +578,7 @@ def parse_agrochema_lines(txt: str, mode_key: str = "agrochema") -> List[dict]:
     return deduplikoti_produktus(out)
 
 
-d
-ef parse_linas_agro_lines(txt: str, mode_key: str = "linas_agro") -> Listproduktai = []
+def parse_linas_agro_lines(txt: str, mode_key: str = "linas_agro") -> Listproduktai = []
     lines = [sutvarkyti_tarpus(l) for l in txt.splitlines() if sutvarkyti_tarpus(l)]
 
     start_idx = 0
