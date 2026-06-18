@@ -578,7 +578,9 @@ def parse_agrochema_lines(txt: str, mode_key: str = "agrochema") -> List[dict]:
     return deduplikoti_produktus(out)
 
 
-def parse_linas_agro_lines(txt: str, mode_key: str = "linas_agro") -> Listproduktai = []
+
+def parse_linas_agro_lines(txt: str, mode_key: str = "linas_agro") -> List[dict]:
+    produktai = []
     lines = [sutvarkyti_tarpus(l) for l in txt.splitlines() if sutvarkyti_tarpus(l)]
 
     start_idx = 0
@@ -590,8 +592,6 @@ def parse_linas_agro_lines(txt: str, mode_key: str = "linas_agro") -> Listproduk
 
     current_item = None
 
-    # Pvz:
-    # 1. KFE_NPK112_MAR NPK 10-26-26, Marocco 600 kg 2,400 Tonos 650,00 1 560,00 21,00% 327,60 1 887,60
     row_pattern = re.compile(
         r"^(?P<eil>\d+)[.]?\s+"
         r"(?P<kodas>[A-Z0-9_\-]+)\s+"
@@ -612,7 +612,6 @@ def parse_linas_agro_lines(txt: str, mode_key: str = "linas_agro") -> Listproduk
         if "iš viso be pvm" in low or "is viso be pvm" in low or "apmokėti iki" in low or "apmoketi iki" in low:
             break
 
-        # pašalinam priklijuotą papildomą tekstą, jei jis nueina į tą pačią eilutę
         line_clean = line.replace("_", " ").replace("!", " ")
         line_clean = re.split(r"\bKiekis\s*:", line_clean, maxsplit=1)[0].strip()
         line_clean = re.split(r"\bVažtaraščio\s+Nr\b", line_clean, maxsplit=1)[0].strip()
@@ -621,7 +620,6 @@ def parse_linas_agro_lines(txt: str, mode_key: str = "linas_agro") -> Listproduk
         if not line_clean:
             continue
 
-        # praleidžiam papildomas info eilutes
         if low.startswith("kiekis :") or low.startswith("pakuočių skaičius") or low.startswith("pakuociu skaicius"):
             continue
 
@@ -630,7 +628,6 @@ def parse_linas_agro_lines(txt: str, mode_key: str = "linas_agro") -> Listproduk
             if current_item:
                 produktai.append(current_item)
 
-            # mums nereikia prekės kodo -> imam tik pavadinimą
             pavadinimas = m.group("pavadinimas")
             kiekis = parse_lt_number(m.group("kiekis"))
             vienetas = normalizuoti_vieneta(m.group("vienetas"))
@@ -647,7 +644,6 @@ def parse_linas_agro_lines(txt: str, mode_key: str = "linas_agro") -> Listproduk
             )
             continue
 
-        # jeigu eilutė yra produkto tęsinys, prijungiam prie pavadinimo
         if current_item and not yra_suvestines_eilute(line_clean):
             if not any(x in txt_norm(line_clean) for x in ["važtaraščio nr", "vaztarascio nr", "pakuočių skaičius", "pakuociu skaicius"]):
                 current_item["Produktas"] = sutvarkyti_tarpus(
@@ -664,6 +660,7 @@ def parse_linas_agro_lines(txt: str, mode_key: str = "linas_agro") -> Listproduk
             out.append(p)
 
     return deduplikoti_produktus(out)
+
 
 
 
