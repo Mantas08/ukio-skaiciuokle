@@ -592,6 +592,8 @@ def parse_linas_agro_lines(txt: str, mode_key: str = "linas_agro") -> List[dict]
 
     current_item = None
 
+    # Pvz.:
+    # 1. KFE_NPK112_MAR NPK 10-26-26, Marocco 600 kg 0,600 Tonos 645,00 387,0021,00% 81,27 468,27
     row_pattern = re.compile(
         r"^(?P<eil>\d+)[.]?\s+"
         r"(?P<kodas>[A-Z0-9_\-]+)\s+"
@@ -612,7 +614,13 @@ def parse_linas_agro_lines(txt: str, mode_key: str = "linas_agro") -> List[dict]
         if "iš viso be pvm" in low or "is viso be pvm" in low or "apmokėti iki" in low or "apmoketi iki" in low:
             break
 
+        # Pašalinam priklijuotą papildomą tekstą
         line_clean = line.replace("_", " ").replace("!", " ")
+
+        # Sutvarkom atvejį, kai suma ir PVM proc. sulipę, pvz. 387,0021,00%
+        line_clean = re.sub(r"(\d,\d{2})(\d{1,2},\d{2}%)", r"\1 \2", line_clean)
+
+        # Nukerpam logistinę informaciją, jei prilipus
         line_clean = re.split(r"\bKiekis\s*:", line_clean, maxsplit=1)[0].strip()
         line_clean = re.split(r"\bVažtaraščio\s+Nr\b", line_clean, maxsplit=1)[0].strip()
         line_clean = sutvarkyti_tarpus(line_clean)
@@ -628,6 +636,7 @@ def parse_linas_agro_lines(txt: str, mode_key: str = "linas_agro") -> List[dict]
             if current_item:
                 produktai.append(current_item)
 
+            # Prekės kodo nereikia - imam tik pavadinimą
             pavadinimas = m.group("pavadinimas")
             kiekis = parse_lt_number(m.group("kiekis"))
             vienetas = normalizuoti_vieneta(m.group("vienetas"))
@@ -644,8 +653,12 @@ def parse_linas_agro_lines(txt: str, mode_key: str = "linas_agro") -> List[dict]
             )
             continue
 
+        # Jei yra produkto tęsinys - prijungiam
         if current_item and not yra_suvestines_eilute(line_clean):
-            if not any(x in txt_norm(line_clean) for x in ["važtaraščio nr", "vaztarascio nr", "pakuočių skaičius", "pakuociu skaicius"]):
+            if not any(x in txt_norm(line_clean) for x in [
+                "važtaraščio nr", "vaztarascio nr",
+                "pakuočių skaičius", "pakuociu skaicius"
+            ]):
                 current_item["Produktas"] = sutvarkyti_tarpus(
                     f'{current_item["Produktas"]} {line_clean}'
                 )
