@@ -1,6 +1,7 @@
 
 import io
 import re
+from decimal import Decimal, ROUND_HALF_UP
 from datetime import date, datetime
 from typing import Dict, List, Tuple
 
@@ -377,6 +378,31 @@ def gauti_islaidas(sb, filtrai=None):
 def gauti_sandeli(sb):
     r = sb.table("sandelis").select("*").order("produktas").execute()
     return pd.DataFrame(r.data) if getattr(r, "data", None) else pd.DataFrame()
+
+
+def parengti_pajamu_irasa(pardavimo_data, lauko_id, plotas_ha, kiekis_t,
+                         kaina_eur_t, pastaba="", suma_pagal_saskaita=None):
+    """Vienas pardavimas: fizinės tonos nedauginamos iš lauko ploto."""
+    kiekis = Decimal(str(kiekis_t))
+    plotas = Decimal(str(plotas_ha))
+    kaina = Decimal(str(kaina_eur_t))
+    if not all(v.is_finite() for v in (kiekis, plotas, kaina)):
+        raise ValueError("Kiekis, plotas ir kaina turi būti baigtiniai skaičiai.")
+    if kiekis <= 0 or plotas <= 0 or kaina < 0:
+        raise ValueError("Kiekis ir lauko plotas turi būti didesni už nulį, kaina negali būti neigiama.")
+    suma = kiekis * kaina if suma_pagal_saskaita is None else Decimal(str(suma_pagal_saskaita))
+    if not suma.is_finite() or suma < 0:
+        raise ValueError("Pardavimo suma negali būti neigiama ar nebaigtinė.")
+    suma = suma.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    # Po nuoskaitų faktinė kaina fizinei tonai gali skirtis nuo sutartinės kainos.
+    faktine_kaina = suma / kiekis if suma_pagal_saskaita is not None else kaina
+    return {
+        "data": formatuoti_data(pardavimo_data), "lauko_id": int(lauko_id),
+        "derlius_t_ha": float(kiekis / plotas),
+        "bendras_derlius_t": float(kiekis),
+        "pardavimo_kaina_eur_t": float(faktine_kaina),
+        "pajamu_suma": float(suma), "pastaba": str(pastaba or ""),
+    }
 
 
 def gauti_pajamas(sb, lauko_id=None, nuo=None, iki=None):
@@ -1115,36 +1141,65 @@ elif puslapis == "📦 Sandėlis":
 
 elif puslapis == "💰 Pajamos":
     st.title("Pajamos")
+    st.caption("Vienas įrašas – viena priekaba / pardavimas. Registruojamos fizinės tonos ir pardavimo suma be PVM. Pardavimas nepatvirtina pinigų gavimo.")
     t1, t2 = st.tabs(["Registruoti", "Peržiūra"])
     with t1:
         if laukai_df.empty:
             st.warning("Pirma sukurkite laukus.")
         else:
+            pagal_saskaita = st.checkbox("Tiksli suma iš sąskaitos (po nuoskaitų, be PVM)", value=True)
             with st.form("pf", clear_on_submit=True):
                 c1, c2 = st.columns(2)
                 with c1:
                     pdata = st.date_input("Pardavimo data", value=date.today())
-                    plaukas = st.selectbox("Laukas", laukai_df["id"].tolist(), format_func=lambda x: f'{laukai_df[laukai_df["id"] == x].iloc[0]["pavadinimas"]} ({laukai_df[laukai_df["id"] == x].iloc[0]["plotas_ha"]} ha)')
+                    plaukas = st.selectbox("Laukas", laukai_df["id"].tolist(), format_func=lambda x: f'{laukai_df[laukai_df["id"] == x].iloc[0]["pavadinimas"]} · {laukai_df[laukai_df["id"] == x].iloc[0]["kultura"]} ({laukai_df[laukai_df["id"] == x].iloc[0]["plotas_ha"]} ha)')
+                    ppast = st.text_area("Sąskaita, pardavėjas ir pastaba", placeholder="Sąskaitos numeris, Jonas / Dainius, įskaitomas svoris, nuoskaitos...")
                 with c2:
-                    pder = st.number_input("Derlius (t/ha)", min_value=0.0, value=0.0, step=0.1)
-                    pkaina = st.number_input("Pardavimo kaina (EUR/t)", min_value=0.0, value=0.0, step=1.0)
-                    ppast = st.text_input("Pastaba", placeholder="(neprivaloma)")
+                    pkiekis = st.number_input("Nuvežta šia priekaba (t)", min_value=0.0, value=0.0, step=0.001, format="%.3f", help="Fizinis neto svoris. Pavyzdžiui, 15 180 kg = 15,180 t. Iš hektarų nedauginama.")
+                    if pagal_saskaita:
+                        psaskaita = st.number_input("Pardavimo suma pagal sąskaitą (EUR, be PVM)", min_value=0.0, value=0.0, step=0.01, format="%.2f")
+                        pkaina = 0.0
+                        st.caption("Faktinė kaina fizinei tonai bus apskaičiuota iš sumos ir nuvežto kiekio. Jei priekabai išrašytos kelios pardavimo sąskaitos, sudėkite jų sumas ir kiekius po vieną kartą.")
+                    else:
+                        psaskaita = None
+                        pkaina = st.number_input("Kaina už fizinę toną (EUR/t, be PVM)", min_value=0.0, value=0.0, step=0.01, format="%.4f")
+                        st.caption("Šį būdą naudokite tik jei nėra svorio ar piniginių nuoskaitų. Kitaip įveskite tikslią sąskaitos sumą.")
                 if st.form_submit_button("Registruoti", use_container_width=True):
                     lr = laukai_df[laukai_df["id"] == plaukas].iloc[0]
-                    bd = float(lr["plotas_ha"]) * float(pder)
-                    ps = bd * float(pkaina)
-                    sb.table("pajamos").insert({"data": formatuoti_data(pdata), "lauko_id": int(plaukas), "derlius_t_ha": float(pder), "bendras_derlius_t": round(bd, 2), "pardavimo_kaina_eur_t": float(pkaina), "pajamu_suma": round(ps, 2), "pastaba": ppast or ""}).execute()
-                    st.success(f"Pajamos: {round(ps, 2)} EUR")
-                    st.rerun()
+                    try:
+                        irasas = parengti_pajamu_irasa(pdata, plaukas, lr["plotas_ha"], pkiekis, pkaina, ppast, psaskaita)
+                    except ValueError as exc:
+                        st.error(str(exc))
+                    else:
+                        try:
+                            sb.table("pajamos").insert(irasas).execute()
+                        except Exception:
+                            st.error("Nepavyko patvirtinti įrašymo. Prieš kartodami patikrinkite Peržiūrą, kad pardavimas nesidubliuotų.")
+                        else:
+                            st.success(f'Įrašyta: {irasas["bendras_derlius_t"]:.3f} t; {irasas["pajamu_suma"]:.2f} EUR be PVM')
+                            st.rerun()
     with t2:
         pajdf = gauti_pajamas(sb, filtrai.get("lauko_id"), filtrai.get("nuo"), filtrai.get("iki"))
         if pajdf.empty:
             st.info("Pajamų nėra.")
         else:
-            cols = ["data", "lauko_pavadinimas", "kultura", "derlius_t_ha", "bendras_derlius_t", "pardavimo_kaina_eur_t", "pajamu_suma", "pastaba"]
+            cols = ["data", "lauko_pavadinimas", "kultura", "bendras_derlius_t", "pardavimo_kaina_eur_t", "pajamu_suma", "pastaba"]
             ex = [c for c in cols if c in pajdf.columns]
-            st.dataframe(pajdf[ex], use_container_width=True, hide_index=True)
-            st.caption(f'Visos pajamos: {round(pajdf["pajamu_suma"].sum(), 2)} EUR')
+            st.dataframe(pajdf[ex], use_container_width=True, hide_index=True, column_config={
+                "data": "Pardavimo data", "lauko_pavadinimas": "Laukas", "kultura": "Kultūra",
+                "bendras_derlius_t": st.column_config.NumberColumn("Nuvežta (t)", format="%.3f"),
+                "pardavimo_kaina_eur_t": st.column_config.NumberColumn("Faktinė kaina EUR/fizinę t, be PVM", format="%.4f"),
+                "pajamu_suma": st.column_config.NumberColumn("Pardavimo suma EUR, be PVM", format="%.2f"),
+                "pastaba": "Sąskaita ir pastaba",
+            })
+            st.caption(f'Pardavimų suma: {pajdf["pajamu_suma"].sum():.2f} EUR be PVM. Nuvežta: {pajdf["bendras_derlius_t"].sum():.3f} t.')
+            with st.expander("Paskirstymas laukams ir derlingumas pagal įrašytus pardavimus"):
+                suv = pajdf.groupby("lauko_id", dropna=False).agg(nuvezta_t=("bendras_derlius_t", "sum"), pajamos_eur=("pajamu_suma", "sum")).reset_index()
+                suv = suv.merge(laukai_df[["id", "pavadinimas", "kultura", "plotas_ha"]], left_on="lauko_id", right_on="id", how="left")
+                suv["t_ha"] = suv["nuvezta_t"] / suv["plotas_ha"].where(suv["plotas_ha"] > 0)
+                suv = suv[["pavadinimas", "kultura", "plotas_ha", "nuvezta_t", "t_ha", "pajamos_eur"]].rename(columns={"pavadinimas": "Laukas", "kultura": "Kultūra", "plotas_ha": "Plotas (ha)", "nuvezta_t": "Nuvežta (t)", "t_ha": "Pagal pardavimus (t/ha)", "pajamos_eur": "Pardavimo suma be PVM (EUR)"})
+                st.dataframe(suv.round(3), use_container_width=True, hide_index=True)
+                st.caption("Rodoma tik pagal įrašytus pardavimus. Apytikslis priekabų priskyrimas laukams nėra faktinio lauko derliaus patvirtinimas.")
 
 elif puslapis == "📈 Pelningumas":
     st.title("Pelningumas")
